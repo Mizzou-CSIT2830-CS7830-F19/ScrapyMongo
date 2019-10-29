@@ -7,9 +7,7 @@
 
 import pymongo
 
-#from scrapy.conf import settings
 from scrapy.exceptions import DropItem
-#from scrapy import log
 import logging
 
 class BricksetPipeline(object):
@@ -19,19 +17,32 @@ class BricksetPipeline(object):
 
 class MongoDBPipeline(object):
 
-    def __init__(self):
-        connection = pymongo.MongoClient("localhost",27017)
-        db = connection["brickset"]
-        self.collection = db["sets"]
+    collection_name = 'sets'
+
+    def __init__(self, mongo_uri, mongo_db):
+        self.mongo_uri = mongo_uri
+        self.mongo_db = mongo_db
+
+    @classmethod
+    def from_crawler(cls, crawler):
+        ## pull in information from settings.py
+        return cls(
+            mongo_uri=crawler.settings.get('MONGODB_SERVER'),
+            mongo_db=crawler.settings.get('MONGODB_DB')
+        )
+
+    def open_spider(self, spider):
+        ## initializing spider
+        ## opening db connection
+        self.client = pymongo.MongoClient(self.mongo_uri)
+        self.db = self.client[self.mongo_db]
+
+    def close_spider(self, spider):
+        ## clean up when spider is closed
+        self.client.close()
 
     def process_item(self, item, spider):
-        valid = True
-        for data in item:
-            if not data:
-                valid = False
-                raise DropItem("Missing {0}!".format(data))
-        if valid:
-            self.collection.insert(dict(item))
-#            log.msg("Question added to MongoDB database!", level=log.DEBUG, spider=spider)
-            logging.log(logging.DEBUG, "Question added to MongoDB database!")
+        ## how to handle each post
+        self.db[self.collection_name].insert(dict(item))
+        logging.debug("Post added to MongoDB!")
         return item
